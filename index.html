@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JD Pizzaria - Sistema de Pedidos</title>
+<style>
+:root {
+    --primary: #ff3c3c;
+    --secondary: #2ecc71;
+    --danger: #e74c3c;
+    --bg: #111;
+    --card: #1c1c1c;
+    --text: #fff;
+}
+body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 20px;
+    margin: 0;
+}
+h1 {
+    text-align: center;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+.container {
+    max-width: 500px;
+    margin: auto;
+}
+select, input, button {
+    width: 100%;
+    padding: 12px;
+    margin: 8px 0;
+    border-radius: 8px;
+    border: 1px solid #333;
+    background: #222;
+    color: white;
+    box-sizing: border-box;
+    font-size: 16px;
+}
+button { cursor: pointer; }
+button:hover { opacity: 0.85; }
+.btn-add { background: var(--secondary); color: white; font-weight: bold; border: none; }
+.btn-finalizar { background: var(--primary); color: white; font-weight: bold; font-size: 18px; border: none; margin-top: 20px; }
+.btn-confirm { background: var(--secondary); color: white; font-weight: bold; font-size: 16px; border: none; margin-top: 10px; }
+.remove-btn { background: var(--danger); font-size: 12px; border: none; cursor: pointer; width: auto; padding: 6px 12px; float: right; border-radius: 5px; }
+.item-box { background: var(--card); padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid var(--primary); overflow: hidden; }
+.flex-row { display: flex; gap: 10px; align-items: center; margin-top: 5px; }
+.qty-input { width: 60px; text-align: center; }
+.total-box { background: var(--primary); padding: 15px; text-align: center; font-size: 22px; font-weight: bold; border-radius: 10px; margin: 20px 0; }
+.modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); padding: 20px; box-sizing: border-box; overflow-y: auto; }
+.modal-content { background: var(--card); padding: 20px; border-radius: 12px; max-width: 500px; margin: auto; }
+.info-nota { font-size: 0.85em; color: #aaa; font-style: italic; margin-bottom: 10px; }
+.resumo-texto { line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🍕 JD PIZZARIA</h1>
+<div style="background:#2ecc71;padding:15px;border-radius:10px;margin-bottom:20px;">
+<h3>🔥 Combos Pizzas Tradicionais</h3>
+
+<p>(Mussarela ,Calabresa e Frango)</p>
+<p>1 🍕 + 🥤 1L = <b>R$40</b></p>
+
+<p>1 🍕 + 🥤 2L = <b>R$45</b></p>
+
+<p>2 🍕🍕 + 🥤 2L = <b>R$75</b></p>
+
+</div>
+    <h3>Pizzas</h3>
+    <div id="pizzas-lista"></div>
+    <button class="btn-add" onclick="adicionarPizza()">➕ Adicionar Pizza</button>
+
+    <h3>🥤 Bebidas</h3>
+    <div id="refris-lista"></div>
+    <button class="btn-add" onclick="adicionarRefri()">➕ Adicionar Bebida</button>
+
+    <div class="total-box">Total: R$ <span id="total-display">0,00</span></div>
+
+    <h3>Pagamento & Entrega</h3>
+    <select id="pagamento" onchange="verificarPagamento()">
+        <option value="">Forma de Pagamento</option>
+        <option value="Pix">Pix</option>
+        <option value="Dinheiro">Dinheiro</option>
+        <option value="Cartão">Cartão na entrega</option>
+    </select>
+    
+    <input type="number" id="valor_pago" placeholder="Cliente vai pagar com quanto?" style="display:none;">
+
+    <h3>Seus Dados</h3>
+    <input type="text" id="nome" placeholder="Seu Nome">
+    <input type="tel" id="telefone" placeholder="WhatsApp (DDD + Número)">
+    <input type="text" id="rua" placeholder="Rua e Número">
+    <input type="text" id="referencia" placeholder="Ponto de Referência">
+
+    <button class="btn-finalizar" onclick="revisarPedido()">REVISAR PEDIDO</button>
+</div>
+
+<div class="modal" id="modal">
+    <div class="modal-content">
+        <h2>🧾 Resumo do Pedido</h2>
+        <p class="info-nota">*Em pizzas meio-a-meio, prevalece o valor da maior.</p>
+        <div id="resumo-html" class="resumo-texto"></div>
+        <button class="btn-confirm" onclick="fecharModal()">🔙 Voltar e Corrigir</button>
+        <button class="btn-confirm" onclick="confirmarEnviar()">✅ Confirmar e Enviar</button>
+    </div>
+</div>
+
+<script>
+// ==========================================
+// CONFIGURAÇÃO DO CARDÁPIO
+// ==========================================
+const MENU = {
+    pizzasTrad: [
+        { nome: "Mussarela", preco: 35 },
+        { nome: "Calabresa", preco: 37 },
+        { nome: "Frango", preco: 37 }
+    ],
+
+    pizzasEsp: [
+        { nome: "Portuguesa", preco: 40 },
+        { nome: "Frango com Catupiry", preco: 42 },
+        { nome: "4 Queijos", preco: 42 },
+        { nome: "Carne de Sol", preco: 45 }
+    ],
+
+    bebidas: [
+        { nome: "Refrigerante 1L", preco: 10 },
+        { nome: "Refrigerante 2L", preco: 14 }
+    ]
+};
+let totalGeral = 0;
+
+// ==========================================
+// FUNÇÕES
+// ==========================================
+function formatar(valor) {
+    return valor.toLocaleString("pt-BR",{minimumFractionDigits:2});
+}
+
+function popularSelect(tipo) {
+
+    let options = `<option value="">Escolha...</option>`;
+
+    if(tipo === "pizzas"){
+
+        options += `<optgroup label="🍕 Tradicionais">`;
+
+        MENU.pizzasTrad.forEach(item=>{
+            options += `<option value="${item.preco}|${item.nome}">
+            ${item.nome} - R$ ${formatar(item.preco)}
+            </option>`;
+        });
+
+        options += `</optgroup>`;
+
+        options += `<optgroup label="⭐ Especiais">`;
+
+        MENU.pizzasEsp.forEach(item=>{
+            options += `<option value="${item.preco}|${item.nome}">
+            ${item.nome} - R$ ${formatar(item.preco)}
+            </option>`;
+        });
+
+        options += `</optgroup>`;
+
+    }
+
+    if(tipo === "bebidas"){
+
+        MENU.bebidas.forEach(item=>{
+            options += `<option value="${item.preco}|${item.nome}">
+            ${item.nome} - R$ ${formatar(item.preco)}
+            </option>`;
+        });
+
+    }
+
+    return options;
+}
+function atualizarBotoesRemover() {
+    let pizzas = document.querySelectorAll(".pizza-item");
+    pizzas.forEach((el) => {
+        let btn = el.querySelector(".remove-btn");
+        btn.style.display = pizzas.length > 1 ? "block" : "none";
+    });
+}
+
+function adicionarPizza() {
+    const div = document.createElement("div");
+    div.className = "item-box pizza-item";
+    div.innerHTML = `
+        <button class="remove-btn" onclick="this.parentElement.remove(); calcular(); atualizarBotoesRemover();">❌ Remover</button>
+        <label>Sabor Principal:</label>
+        <select class="sabor1" onchange="calcular()">${popularSelect('pizzas')}</select>
+        
+        <label>Metade (Opcional):</label>
+        <select class="sabor2" onchange="calcular()">
+            <option value="0|NÃO">Não (Pizza Inteira)</option>
+            ${popularSelect('pizzas')}
+        </select>
+        
+        <div class="flex-row">
+            <label>Quantidade:</label>
+            <input type="number" class="qtd-pizza" value="1" min="1" onchange="calcular()">
+        </div>
+<label>Borda:</label>
+<select class="borda" onchange="calcular()">
+<option value="0|Sem borda" selected>Sem borda</option>
+<option value="5|Catupiry">Catupiry + R$5</option>
+<option value="5|Cheddar">Cheddar + R$5</option>
+<option value="7|Chocolate">Chocolate + R$7</option>
+</select>
+        <input type="text" class="obs" placeholder="Ex: Sem cebola, borda recheada...">
+    `;
+    document.getElementById("pizzas-lista").appendChild(div);
+    atualizarBotoesRemover();
+}
+
+function adicionarRefri() {
+    const div = document.createElement("div");
+    div.className = "item-box refri-item";
+    div.innerHTML = `
+        <button class="remove-btn" onclick="this.parentElement.remove(); calcular()">❌ Remover</button>
+        <label>Bebida:</label>
+        <select class="produto" onchange="calcular()">${popularSelect('bebidas')}</select>
+        <div class="flex-row">
+            <label>Quantidade:</label>
+            <input type="number" class="qtd" value="1" min="1" onchange="calcular()">
+        </div>
+    `;
+    document.getElementById("refris-lista").appendChild(div);
+}
+
+function calcular(){
+
+let total=0
+
+let pizzasTrad=0
+let pizzasOutras=0
+let totalBordas=0
+
+let refri1L=0
+let refri2L=0
+
+const tradicionais=["Mussarela","Calabresa","Frango"]
+
+document.querySelectorAll(".pizza-item").forEach(item=>{
+
+const s1=item.querySelector(".sabor1").value.split("|")
+const s2=item.querySelector(".sabor2").value.split("|")
+
+const qtd=parseInt(item.querySelector(".qtd-pizza").value)||1
+
+if(!s1[1])return
+
+let nome1=s1[1]
+let nome2=s2[1]
+
+let preco=Math.max(parseFloat(s1[0]),parseFloat(s2[0]||0))
+const borda=item.querySelector(".borda").value.split("|")
+let valorBorda=parseFloat(borda[0]||0)
+preco+=valorBorda
+let trad=tradicionais.includes(nome1)
+&&(!nome2||nome2==="NÃO"||tradicionais.includes(nome2))
+
+for(let i=0;i<qtd;i++){
+
+if(trad){
+
+pizzasTrad++
+totalBordas+=valorBorda
+
+}else{
+
+pizzasOutras++
+total+=preco
+
+}
+
+}
+
+})
+
+document.querySelectorAll(".refri-item").forEach(item=>{
+
+const p=item.querySelector(".produto").value.split("|")
+const qtd=parseInt(item.querySelector(".qtd").value)||0
+
+if(!p[1])return
+
+if(p[1]=="Refrigerante 1L")refri1L+=qtd
+if(p[1]=="Refrigerante 2L")refri2L+=qtd
+
+})
+
+while(pizzasTrad>=2 && refri2L>=1){
+
+pizzasTrad-=2
+refri2L-=1
+total+=75
+
+}
+
+while(pizzasTrad>=1 && refri2L>=1){
+
+pizzasTrad-=1
+refri2L-=1
+total+=45
+
+}
+
+while(pizzasTrad>=1 && refri1L>=1){
+
+pizzasTrad-=1
+refri1L-=1
+total+=40
+
+}
+
+total+=pizzasTrad*35
+
+total+=refri1L*10
+total+=refri2L*14
+total+=totalBordas
+totalGeral=total
+
+document.getElementById("total-display").innerText=formatar(total)
+
+}
+function verificarPagamento() {
+    const forma = document.getElementById("pagamento").value;
+    document.getElementById("valor_pago").style.display = (forma === "Dinheiro") ? "block" : "none";
+}
+
+// ==========================================
+// REVISAR PEDIDO
+// ==========================================
+function revisarPedido() {
+    const nome = document.getElementById("nome").value.trim();
+    const tel = document.getElementById("telefone").value.trim();
+    const rua = document.getElementById("rua").value.trim();
+    const ref = document.getElementById("referencia").value.trim();
+    const pag = document.getElementById("pagamento").value;
+    
+    if(!nome || !tel || !rua || !ref || !pag) {
+        alert("Preencha todos os campos obrigatórios!");
+        return;
+    }
+    if(tel.replace(/\D/g,'').length < 8) {
+        alert("Digite um número de telefone válido!");
+        return;
+    }
+    if(totalGeral === 0) {
+        alert("Adicione pelo menos um item ao pedido!");
+        return;
+    }
+
+    let trocoInput = 0;
+    if(pag === "Dinheiro") {
+        const campoTroco = parseFloat(document.getElementById("valor_pago").value);
+        if(!campoTroco) { alert("Informe o valor que o cliente vai pagar!"); return; }
+        trocoInput = campoTroco;
+        if(trocoInput < totalGeral) { alert("Valor menor que o total!"); return; }
+    }
+
+    let html = "📋 <b>CONFIRA SEU PEDIDO</b><br><br>";
+    let cont = 1;
+
+    document.querySelectorAll(".pizza-item").forEach(el => {
+        const s1 = el.querySelector(".sabor1").value.split("|");
+        const s2 = el.querySelector(".sabor2").value.split("|");
+        const obs = el.querySelector(".obs").value;
+        const borda = el.querySelector(".borda").value.split("|");
+        const qtd = parseInt(el.querySelector(".qtd-pizza").value) || 1;
+
+        if(s1[1]) {
+            let nomeP = (s2[1] && s2[1] !== "NÃO") ? `Meia ${s1[1]} / Meia ${s2[1]}` : s1[1];
+let valorBase = Math.max(parseFloat(s1[0]), parseFloat(s2[0] || 0));
+let valorFinal = (valorBase + parseFloat(borda[0] || 0)) * qtd;
+html += `${cont++}. 🍕 ${qtd}x ${nomeP}`;
+
+if(borda[1] !== "Sem borda"){
+html += ` (Borda ${borda[1]})`;
+}
+
+html += ` – R$ ${formatar(valorFinal)}<br>`;            if(obs) html += `<i>(${obs})</i><br>`;
+            html += `<br>`;
+        }
+    });
+
+    document.querySelectorAll(".refri-item").forEach(el => {
+        const p = el.querySelector(".produto").value.split("|");
+        const q = parseInt(el.querySelector(".qtd").value) || 1;
+        if(p[1]) html += `${cont++}. 🥤 ${q}x ${p[1]} – R$ ${formatar(p[0]*q)}<br>`;
+    });
+
+    html += `<br>💰 <b>Total: R$ ${formatar(totalGeral)}</b><br><br>`;
+    html += `👤 Nome: ${nome}<br>`;
+    html += `📱 Telefone: ${tel}<br>`;
+    html += `📍 Endereço: ${rua}<br>`;
+    html += `📌 Referência: ${ref}<br>`;
+    html += `💳 Pagamento: ${pag}<br>`;
+    if(pag === "Dinheiro") {
+        html += `💵 Vai pagar com: R$ ${formatar(trocoInput)}<br>`;
+        html += `💰 Troco: R$ ${formatar(trocoInput - totalGeral)}<br>`;
+    }
+
+    document.getElementById("resumo-html").innerHTML = html;
+    document.getElementById("modal").style.display = "block";
+}
+
+function fecharModal() { document.getElementById("modal").style.display = "none"; }
+
+// ==========================================
+// ENVIAR PEDIDO WHATSAPP
+// ==========================================
+function confirmarEnviar() {
+    const nome = document.getElementById("nome").value;
+    const tel = document.getElementById("telefone").value;
+    const rua = document.getElementById("rua").value;
+    const ref = document.getElementById("referencia").value;
+    const pag = document.getElementById("pagamento").value;
+    const troco = parseFloat(document.getElementById("valor_pago").value) || 0;
+
+    let msg = `🍕 *NOVO PEDIDO - JD PIZZARIA*\n\n`;
+    let cont = 1;
+
+    document.querySelectorAll(".pizza-item").forEach(el => {
+        const s1 = el.querySelector(".sabor1").value.split("|");
+        const s2 = el.querySelector(".sabor2").value.split("|");
+        const obs = el.querySelector(".obs").value;
+const borda = el.querySelector(".borda").value.split("|");
+        const qtd = parseInt(el.querySelector(".qtd-pizza").value) || 1;
+
+        if(s1[1]) {
+            let nomeP = (s2[1] && s2[1] !== "NÃO") ? `Meia ${s1[1]} / Meia ${s2[1]}` : s1[1];
+let valorBase = Math.max(parseFloat(s1[0]), parseFloat(s2[0] || 0));
+let valorFinal = (valorBase + parseFloat(borda[0] || 0)) * qtd;
+msg += `${cont++}. 🍕 ${qtd}x ${nomeP}`;
+
+if(borda[1] !== "Sem borda"){
+msg += ` (Borda ${borda[1]})`;
+}
+
+msg += ` - R$ ${formatar(valorFinal)}\n`;            if(obs) msg += `Obs: ${obs}\n`;
+            msg += `\n`;
+        }
+    });
+
+    document.querySelectorAll(".refri-item").forEach(el => {
+        const p = el.querySelector(".produto").value.split("|");
+        const q = parseInt(el.querySelector(".qtd").value) || 1;
+        if(p[1]) msg += `${cont++}. 🥤 ${q}x ${p[1]} - R$ ${formatar(p[0]*q)}\n`;
+    });
+
+    msg += `💰 *TOTAL: R$ ${formatar(totalGeral)}*\n\n`;
+    msg += `👤 Cliente: ${nome}\n📱 ${tel}\n📍 End: ${rua}\n📌 Ref: ${ref}\n\n`;
+    msg += `💳 Pagamento: ${pag}\n`;
+    if(pag === "Dinheiro") {
+        msg += `Vai pagar com: R$ ${formatar(troco)}\nTroco: R$ ${formatar(troco - totalGeral)}\n`;
+    }
+
+    const numero = "5585999768976"; 
+    const url = `https://api.whatsapp.com/send?phone=${numero}&text=${encodeURIComponent(msg)}`;
+    window.open(url, "_blank");
+}
+
+// Inicializa com uma pizza
+adicionarPizza();
+</script>
+</body>
+</html>
